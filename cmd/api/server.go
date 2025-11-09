@@ -25,7 +25,7 @@ func teachersHandlers(w http.ResponseWriter, r *http.Request) {
 		sortBy:=queryParams.Get("sortBy")
 		fmt.Println(sortBy, "sortBy")
 		if userId != "" {
-			fmt.Fprintf(w, "Hello, World! Get Teacher with ID: %s\n", userId)
+			fmt.Fprintf(w, "Hello, World! Get Teacher with IDs: %s\n", userId)
 			return
 		}
 		fmt.Fprintln(w, "Hello, World! Get Teachers")
