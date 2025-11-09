@@ -1,0 +1,46 @@
+# ─────────────────────────────
+# Go build and binary artifacts
+# ─────────────────────────────
+*.exe
+*.dll
+*.so
+*.test
+*.out
+
+# ─────────────────────────────
+# Temporary directories and build output
+# ─────────────────────────────
+/tmp
+bin/
+dist/
+
+# ─────────────────────────────
+# Go modules & dependencies
+# ─────────────────────────────
+vendor/
+
+# ─────────────────────────────
+# Environment files
+# ─────────────────────────────
+.env
+/cmd/api/.env
+
+# ─────────────────────────────
+# IDE and editor specific
+# ─────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ─────────────────────────────
+# Air temporary build files
+# ─────────────────────────────
+.air.toml
+/tmp/main.exe
+
+# ─────────────────────────────
+# OS generated files
+# ─────────────────────────────
+.DS_Store
+Thumbs.db
