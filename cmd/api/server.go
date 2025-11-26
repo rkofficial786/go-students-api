@@ -38,7 +38,16 @@ func main() {
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintln(w, "Hello, World! new")
 	})
-	mux.HandleFunc("/teachers/", handlers.TeachersHandlers)
+	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintln(w, "Hello, World!")
+	})
+	
+	mux.HandleFunc("GET /teachers", handlers.GetTeachersHandler)
+	mux.HandleFunc("GET /teachers/{id}", handlers.GetTeacherByIdHandler)
+	mux.HandleFunc("POST /teachers", handlers.AddTeacherHandler)
+	mux.HandleFunc("PUT /teachers/{id}", handlers.UpdateTeacherHandler)
+	mux.HandleFunc("DELETE /teachers/{id}", handlers.DeleteTeacherHandler)
+	mux.HandleFunc("DELETE /teachers/bulk", handlers.DeleteMupltipleTeachersHandler)
 
 	rl := mw.NewRateLimiter(400, time.Minute)
 	handler := applyMiddlewares(
