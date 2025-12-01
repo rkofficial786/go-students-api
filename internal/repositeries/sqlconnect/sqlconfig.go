@@ -8,6 +8,10 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 )
 
+type DB struct {
+	Conn *sql.DB
+}
+
 func ConnectDB() (*sql.DB, error) {
 
 	user := os.Getenv("DB_USER")
@@ -27,3 +31,5 @@ func ConnectDB() (*sql.DB, error) {
 
 	return db, nil
 }
+
+
