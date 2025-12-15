@@ -41,13 +41,20 @@ func main() {
 	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintln(w, "Hello, World!")
 	})
-	
+
 	mux.HandleFunc("GET /teachers", handlers.GetTeachersHandler)
 	mux.HandleFunc("GET /teachers/{id}", handlers.GetTeacherByIdHandler)
 	mux.HandleFunc("POST /teachers", handlers.AddTeacherHandler)
 	mux.HandleFunc("PUT /teachers/{id}", handlers.UpdateTeacherHandler)
 	mux.HandleFunc("DELETE /teachers/{id}", handlers.DeleteTeacherHandler)
 	mux.HandleFunc("DELETE /teachers/bulk", handlers.DeleteMupltipleTeachersHandler)
+
+	mux.HandleFunc("GET /students", handlers.GetStudentsHandler)
+	mux.HandleFunc("GET /students/{id}", handlers.GetStudentByIdHandler)
+	mux.HandleFunc("POST /students", handlers.AddStudentHandler)
+	mux.HandleFunc("PUT /students/{id}", handlers.UpdateStudentHandler)
+	mux.HandleFunc("DELETE /students/{id}", handlers.DeleteStudentHandler)
+	mux.HandleFunc("DELETE /students/bulk", handlers.DeleteMupltipleStudentsHandler)
 
 	rl := mw.NewRateLimiter(400, time.Minute)
 	handler := applyMiddlewares(
