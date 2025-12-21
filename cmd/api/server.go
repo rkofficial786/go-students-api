@@ -2,8 +2,9 @@ package main
 
 import (
 	"fmt"
-	"school-api/internal/api/handlers"
+
 	mw "school-api/internal/api/middlewares"
+	"school-api/internal/api/router"
 	"school-api/internal/repositeries/sqlconnect"
 	"time"
 
@@ -42,19 +43,9 @@ func main() {
 		fmt.Fprintln(w, "Hello, World!")
 	})
 
-	mux.HandleFunc("GET /teachers", handlers.GetTeachersHandler)
-	mux.HandleFunc("GET /teachers/{id}", handlers.GetTeacherByIdHandler)
-	mux.HandleFunc("POST /teachers", handlers.AddTeacherHandler)
-	mux.HandleFunc("PUT /teachers/{id}", handlers.UpdateTeacherHandler)
-	mux.HandleFunc("DELETE /teachers/{id}", handlers.DeleteTeacherHandler)
-	mux.HandleFunc("DELETE /teachers/bulk", handlers.DeleteMupltipleTeachersHandler)
-
-	mux.HandleFunc("GET /students", handlers.GetStudentsHandler)
-	mux.HandleFunc("GET /students/{id}", handlers.GetStudentByIdHandler)
-	mux.HandleFunc("POST /students", handlers.AddStudentHandler)
-	mux.HandleFunc("PUT /students/{id}", handlers.UpdateStudentHandler)
-	mux.HandleFunc("DELETE /students/{id}", handlers.DeleteStudentHandler)
-	mux.HandleFunc("DELETE /students/bulk", handlers.DeleteMupltipleStudentsHandler)
+	router.RegisterStudentsRoutes(mux)
+	router.RegisterTeachersRoutes(mux)
+	router.RegisterExecRoutes(mux)
 
 	rl := mw.NewRateLimiter(400, time.Minute)
 	handler := applyMiddlewares(

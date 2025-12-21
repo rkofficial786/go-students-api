@@ -126,15 +126,15 @@ func FindStudent(db *sql.DB, search string, filters map[string]string, sort stri
 	return students, nil
 }
 
-func AddStudent(db *sql.DB, t *models.Teacher) (sql.Result, error) {
+func AddStudent(db *sql.DB, t *models.Student) (sql.Result, error) {
 
-	stmt, err := db.Prepare("INSERT INTO teachers (first_name,last_name,email,class,subject) VALUES (?,?,?,?,?)")
+	stmt, err := db.Prepare("INSERT INTO student (first_name,last_name,email,class_id) VALUES (?,?,?,?)")
 	if err != nil {
 		return nil, err
 	}
 	defer stmt.Close()
 
-	res, err := stmt.Exec(t.FirstName, t.LastName, t.Email, t.Class, t.Subject)
+	res, err := stmt.Exec(t.FirstName, t.LastName, t.Email, t.ClassId)
 	if err != nil {
 		return nil, err
 	}
@@ -143,35 +143,32 @@ func AddStudent(db *sql.DB, t *models.Teacher) (sql.Result, error) {
 
 }
 
-func UpdateStudent(db *sql.DB, existingTeacher, updateTeacher *models.Teacher, id int) (sql.Result, error) {
-	err := db.QueryRow("SELECT id,first_name,last_name,email,subject,class FROM teachers WHERE id= ?", id).
-		Scan(&existingTeacher.ID, &existingTeacher.FirstName, &existingTeacher.LastName, &existingTeacher.Email, &existingTeacher.Subject, &existingTeacher.Class)
+func UpdateStudent(db *sql.DB, existingStudent, updateStudent *models.Student, id int) (sql.Result, error) {
+	err := db.QueryRow("SELECT id,first_name,last_name,email,class_id FROM student WHERE id= ?", id).
+		Scan(&existingStudent.ID, &existingStudent.FirstName, &existingStudent.LastName, &existingStudent.Email, &existingStudent.ClassId)
 
 	if err != nil {
-
 		return nil, err
 	}
 
-	updateTeacher.ID = existingTeacher.ID
+	updateStudent.ID = existingStudent.ID
 	// Simple conditional updates
-	if updateTeacher.FirstName == "" {
-		updateTeacher.FirstName = existingTeacher.FirstName
+	if updateStudent.FirstName == "" {
+		updateStudent.FirstName = existingStudent.FirstName
 	}
-	if updateTeacher.LastName == "" {
-		updateTeacher.LastName = existingTeacher.LastName
+	if updateStudent.LastName == "" {
+		updateStudent.LastName = existingStudent.LastName
 	}
-	if updateTeacher.Email == "" {
-		updateTeacher.Email = existingTeacher.Email
-	}
-	if updateTeacher.Subject == "" {
-		updateTeacher.Subject = existingTeacher.Subject
-	}
-	if updateTeacher.Class == "" {
-		updateTeacher.Class = existingTeacher.Class
+	if updateStudent.Email == "" {
+		updateStudent.Email = existingStudent.Email
 	}
 
-	_, err = db.Exec("UPDATE teachers SET first_name=?, last_name=?, email=?, subject=?, class=? WHERE id=?",
-		updateTeacher.FirstName, updateTeacher.LastName, updateTeacher.Email, updateTeacher.Subject, updateTeacher.Class, id)
+	if updateStudent.ClassId == 0 {
+		updateStudent.ClassId = existingStudent.ClassId
+	}
+
+	_, err = db.Exec("UPDATE student SET first_name=?, last_name=?, email=?, class_id=? WHERE id=?",
+		updateStudent.FirstName, updateStudent.LastName, updateStudent.Email, updateStudent.ClassId, id)
 
 	if err != nil {
 
@@ -271,4 +268,23 @@ func PatchMultipleStudents(db *sql.DB, ids []int, updates []map[string]any) erro
 	}
 
 	return tx.Commit()
+}
+
+func CheckStudentExists(db *sql.DB, email string, id int) (bool, error) {
+	var tmp int
+	var err error
+	if email != "" {
+		err = db.QueryRow("SELECT id FROM student WHERE email=?", email).Scan(&tmp)
+	} else if id != 0 {
+		err = db.QueryRow("SELECT id FROM student WHERE id=?", id).Scan(&tmp)
+	} else {
+		return false, err
+	}
+
+	if err == sql.ErrNoRows {
+		return false, err
+	}
+
+	return true, err
+
 }

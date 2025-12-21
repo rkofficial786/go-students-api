@@ -89,14 +89,20 @@ func AddStudentHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer db.Close()
 
-	var teacher models.Teacher
+	var student models.Student
 
-	if err := json.NewDecoder(r.Body).Decode(&teacher); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&student); err != nil {
 		utils.Http500(w, err)
 		return
 	}
+	exists, _ := repo.CheckStudentExists(db.DB, student.Email, 0)
 
-	res, err := repo.AddTeacher(db.DB, &teacher)
+	if exists {
+		utils.Error(w, "Student with provided email already exists", nil)
+		return
+	}
+
+	res, err := repo.AddStudent(db.DB, &student)
 
 	if err != nil {
 		utils.Http500(w, err)
@@ -109,9 +115,9 @@ func AddStudentHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	teacher.ID = int(lastId)
+	student.ID = int(lastId)
 
-	utils.Success(w, "Teacher added successfully", teacher)
+	utils.Success(w, "Student added successfully", student)
 }
 
 func UpdateStudentHandler(w http.ResponseWriter, r *http.Request) {
@@ -121,8 +127,8 @@ func UpdateStudentHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var updateTeacher models.Teacher
-	if err := json.NewDecoder(r.Body).Decode(&updateTeacher); err != nil {
+	var updateStudent models.Student
+	if err := json.NewDecoder(r.Body).Decode(&updateStudent); err != nil {
 		utils.Error(w, "Invalid request body", err)
 		return
 	}
@@ -134,9 +140,9 @@ func UpdateStudentHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer db.Close()
 
-	var existingTeacher models.Teacher
+	var existingStudent models.Student
 
-	_, err = repo.UpdateTeacher(db.DB, &existingTeacher, &updateTeacher, id)
+	_, err = repo.UpdateStudent(db.DB, &existingStudent, &updateStudent, id)
 
 	if err == sql.ErrNoRows {
 		utils.Error(w, "Teacher not found", err)
@@ -146,7 +152,7 @@ func UpdateStudentHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	utils.Success(w, "Teacher updated successfully", updateTeacher)
+	utils.Success(w, "Teacher updated successfully", updateStudent)
 }
 
 func DeleteStudentHandler(w http.ResponseWriter, r *http.Request) {
@@ -163,7 +169,14 @@ func DeleteStudentHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer db.Close()
 
-	result, err := db.Exec("DELETE FROM teachers WHERE id = ?", id)
+	_, err = repo.CheckStudentExists(db, "", id)
+
+	if err != nil {
+		utils.Error(w, "Student not found2 ", err)
+		return
+	}
+
+	result, err := db.Exec("DELETE FROM student WHERE id = ?", id)
 	if err != nil {
 		utils.Http500(w, err)
 		return
@@ -176,56 +189,63 @@ func DeleteStudentHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if rowsAffected == 0 {
-		utils.Error(w, "Teacher not found", err)
+		utils.Error(w, "Student not found", err)
 		return
 	}
 
 	utils.Success(w, "Teacher deleted successfully", nil)
 }
 
-func DeleteMupltipleStudentsHandler(w http.ResponseWriter, r *http.Request) {
-	var ids []int
-	if err := json.NewDecoder(r.Body).Decode(&ids); err != nil {
-		utils.Error(w, "Invalid JSON body (expecting array of IDs)", err)
-		return
-	}
+func GetStudentOfTeachers(w http.ResponseWriter, r *http.Request) {
 
-	db, err := db.New()
+	db, err := sqlconnect.ConnectDB()
 	if err != nil {
 		utils.Http500(w, err)
 		return
 	}
 	defer db.Close()
 
-	err = repo.DeleteMultipleStudents(db.DB, ids)
+	teacherIdStr := r.URL.Query().Get("teacher_id")
+
+	if teacherIdStr == "" {
+		utils.Error(w, "teacher_id query param is required", nil)
+		return
+	}
+
+	teacherId, err := strconv.Atoi(teacherIdStr)
 
 	if err != nil {
-		utils.Error(w, "Something Went wrong", err)
+		utils.Error(w, "Invalid teacher id string", err)
 		return
 	}
 
-	utils.Success(w, "Students deleted successfully", nil)
-}
+	var teacherClassId int
 
-func PatchMultipleStudentsHandler(w http.ResponseWriter, r *http.Request) {
-	db, err := db.New()
+	err = db.QueryRow("SELECT class_id FROM teachers WHERE id=? ", teacherId).Scan(&teacherClassId)
+
+	if err == sql.ErrNoRows {
+		utils.Error(w, "No teacher found ", err)
+		return
+	}
+
+	var students []models.Student
+
+	rows, err := db.Query("SELECT id,class_id,first_name,last_name ,email FROM student WHERE class_id=?", teacherClassId)
 	if err != nil {
-		utils.Http500(w, err)
+
+		utils.Error(w, "Student data not found", err)
 		return
 	}
-	defer db.Close()
+	defer rows.Close()
 
-	var updates []map[string]any
-	if err := json.NewDecoder(r.Body).Decode(&updates); err != nil {
-		utils.Error(w, "Invalid JSON format", err)
-		return
+	for rows.Next() {
+		var s models.Student
+
+		err = rows.Scan(&s.ID, &s.ClassId, &s.FirstName, &s.LastName, &s.Email)
+
+		students = append(students, s)
+
 	}
+	utils.Success(w, "students found successfully", students)
 
-	err = repo.PatchMultipleStudents(db.DB, nil, updates)
-	if err != nil {
-		utils.Error(w, "Something went wrong", err)
-		return
-	}
-
-	utils.Success(w, "Students updated successfully", nil)
 }
