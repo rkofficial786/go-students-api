@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"crypto/rand"
-	"crypto/subtle"
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
@@ -14,7 +13,6 @@ import (
 	"school-api/internal/repositeries/sqlconnect"
 	"school-api/pkg/utils"
 	"strconv"
-	"strings"
 	"time"
 
 	"golang.org/x/crypto/argon2"
@@ -274,36 +272,15 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 
 	//verify passs
 
-	parts := strings.Split(exec.Password, ".")
-
-	saltBase64 := parts[0]
-	hashedPasswordBase64 := parts[1]
-
-	salt, err := base64.StdEncoding.DecodeString(saltBase64)
+	isVerified, err := repo.VerifyPassword(req, *exec)
 
 	if err != nil {
-		utils.Error(w, "failed to decode pass", err)
+		utils.Error(w, "Error during pass verify", err)
 		return
 	}
 
-	hashedPassword, err := base64.StdEncoding.DecodeString(hashedPasswordBase64)
-
-	if err != nil {
-		utils.Error(w, "failed to decode pass", err)
-		return
-	}
-
-	hash := argon2.IDKey([]byte(req.Password), salt, 1, 64*1024, 4, 32)
-
-	if len(hash) != len(hashedPassword) {
-		utils.Error(w, "wrong username or password", nil)
-		return
-	}
-
-	if subtle.ConstantTimeCompare(hash, hashedPassword) == 1 {
-
-	} else {
-		utils.Error(w, "wrong username or password", nil)
+	if !isVerified {
+		utils.Error(w, "username or pass is wrong", nil)
 		return
 	}
 
@@ -327,5 +304,20 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	})
 
 	utils.Success(w, "Logged in Successfully", token)
+
+}
+
+func LogoutHandler(w http.ResponseWriter, r *http.Request) {
+	http.SetCookie(w, &http.Cookie{
+
+		Name:     "Bearer",
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   true,
+		Expires:  time.Unix(0, 0),
+	})
+  
+	utils.Success(w,"Logged out successfully",nil)
 
 }

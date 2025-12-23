@@ -1,8 +1,13 @@
 package repo
 
 import (
+	"crypto/subtle"
 	"database/sql"
+	"encoding/base64"
 	"school-api/internal/models"
+	"strings"
+
+	"golang.org/x/crypto/argon2"
 )
 
 func FindExecByID(id int, db *sql.DB) (*models.Exec, error) {
@@ -128,7 +133,6 @@ func FindExec(db *sql.DB, search string, filters map[string]string, sort string)
 }
 
 func AddExec(db *sql.DB, t *models.Exec) (sql.Result, error) {
-	
 
 	stmt, err := db.Prepare("INSERT INTO execs (first_name,last_name,email,username,password,role,inactive) VALUES (?,?,?,?,?,?,?)")
 	if err != nil {
@@ -198,4 +202,38 @@ func CheckExecExists(db *sql.DB, email string, id int) (bool, error) {
 
 	return true, err
 
+}
+
+func VerifyPassword(req models.Exec, exec models.Exec) (bool, error) {
+	parts := strings.Split(exec.Password, ".")
+
+	saltBase64 := parts[0]
+	hashedPasswordBase64 := parts[1]
+
+	salt, err := base64.StdEncoding.DecodeString(saltBase64)
+
+	if err != nil {
+
+		return false, err
+	}
+
+	hashedPassword, err := base64.StdEncoding.DecodeString(hashedPasswordBase64)
+
+	if err != nil {
+
+		return false, err
+	}
+
+	hash := argon2.IDKey([]byte(req.Password), salt, 1, 64*1024, 4, 32)
+
+	if len(hash) != len(hashedPassword) {
+		return false, err
+	}
+
+	if subtle.ConstantTimeCompare(hash, hashedPassword) == 1 {
+
+	} else {
+		return false, err
+	}
+	return true, nil
 }

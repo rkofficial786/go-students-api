@@ -46,7 +46,7 @@ func main() {
 	router.RegisterStudentsRoutes(mux)
 	router.RegisterTeachersRoutes(mux)
 	router.RegisterExecRoutes(mux)
-
+	jwtMiddleware := mw.MiddlewareExcludePaths(mw.JWTMiddleware, "/execs/login")
 	rl := mw.NewRateLimiter(400, time.Minute)
 	handler := applyMiddlewares(
 		mux,
@@ -55,6 +55,7 @@ func main() {
 		mw.Compression,
 		mw.ResponseTime,
 		mw.SecurityHeaders,
+		jwtMiddleware,
 	)
 
 	fmt.Println("server is running on port", port)

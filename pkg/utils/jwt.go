@@ -17,7 +17,7 @@ func SignToken(userId int, username, role string) (string, error) {
 		"uid":  id,
 		"user": username,
 		"role": role,
-		"exp":  jwt.NewNumericDate(time.Now().Add(20 * time.Second)),
+		"exp":  jwt.NewNumericDate(time.Now().Add(20000 * time.Second)),
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
