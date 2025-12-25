@@ -1,9 +1,11 @@
 package repo
 
 import (
+	"crypto/rand"
 	"crypto/subtle"
 	"database/sql"
 	"encoding/base64"
+	"fmt"
 	"school-api/internal/models"
 	"strings"
 
@@ -204,8 +206,8 @@ func CheckExecExists(db *sql.DB, email string, id int) (bool, error) {
 
 }
 
-func VerifyPassword(req models.Exec, exec models.Exec) (bool, error) {
-	parts := strings.Split(exec.Password, ".")
+func VerifyPassword(currentPass string, userPass string) (bool, error) {
+	parts := strings.Split(userPass, ".")
 
 	saltBase64 := parts[0]
 	hashedPasswordBase64 := parts[1]
@@ -224,7 +226,7 @@ func VerifyPassword(req models.Exec, exec models.Exec) (bool, error) {
 		return false, err
 	}
 
-	hash := argon2.IDKey([]byte(req.Password), salt, 1, 64*1024, 4, 32)
+	hash := argon2.IDKey([]byte(currentPass), salt, 1, 64*1024, 4, 32)
 
 	if len(hash) != len(hashedPassword) {
 		return false, err
@@ -236,4 +238,25 @@ func VerifyPassword(req models.Exec, exec models.Exec) (bool, error) {
 		return false, err
 	}
 	return true, nil
+}
+
+func EncryptPassword(password string) (string, error) {
+
+	salt := make([]byte, 16)
+	_, err := rand.Read(salt)
+
+	if err != nil {
+
+		return "", err
+	}
+
+	hash := argon2.IDKey([]byte(password), salt, 1, 64*1024, 4, 32)
+
+	saltBase64 := base64.StdEncoding.EncodeToString(salt)
+	hashBase64 := base64.StdEncoding.EncodeToString(hash)
+
+	encodedHash := fmt.Sprintf("%s.%s", saltBase64, hashBase64)
+
+	return encodedHash, nil
+
 }

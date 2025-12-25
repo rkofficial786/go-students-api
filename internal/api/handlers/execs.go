@@ -2,11 +2,13 @@ package handlers
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"database/sql"
-	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"school-api/internal/models"
 	"school-api/internal/repositeries/db"
 	"school-api/internal/repositeries/repo"
@@ -14,8 +16,6 @@ import (
 	"school-api/pkg/utils"
 	"strconv"
 	"time"
-
-	"golang.org/x/crypto/argon2"
 )
 
 func GetExecByIdHandler(w http.ResponseWriter, r *http.Request) {
@@ -111,20 +111,13 @@ func AddExecHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	salt := make([]byte, 16)
-	_, err = rand.Read(salt)
+	encodedHash, err := repo.EncryptPassword(exec.Password)
 
 	if err != nil {
-		utils.Error(w, "Failed to generate salt", err)
+		utils.Error(w, "error hashing password", err)
 		return
 	}
 
-	hash := argon2.IDKey([]byte(exec.Password), salt, 1, 64*1024, 4, 32)
-
-	saltBase64 := base64.StdEncoding.EncodeToString(salt)
-	hashBase64 := base64.StdEncoding.EncodeToString(hash)
-
-	encodedHash := fmt.Sprintf("%s.%s", saltBase64, hashBase64)
 	exec.Password = encodedHash
 
 	fmt.Println("exec", exec)
@@ -272,7 +265,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 
 	//verify passs
 
-	isVerified, err := repo.VerifyPassword(req, *exec)
+	isVerified, err := repo.VerifyPassword(req.Password, exec.Password)
 
 	if err != nil {
 		utils.Error(w, "Error during pass verify", err)
@@ -317,7 +310,228 @@ func LogoutHandler(w http.ResponseWriter, r *http.Request) {
 		Secure:   true,
 		Expires:  time.Unix(0, 0),
 	})
-  
-	utils.Success(w,"Logged out successfully",nil)
+
+	utils.Success(w, "Logged out successfully", nil)
+
+}
+
+func UpdatePasswordHandler(w http.ResponseWriter, r *http.Request) {
+
+	idStr := r.PathValue("id")
+
+	userId, err := strconv.Atoi(idStr)
+
+	if err != nil {
+		utils.Error(w, "Error parsing id", err)
+		return
+
+	}
+	var req models.UpdatePasswordRequest
+
+	err = json.NewDecoder(r.Body).Decode(&req)
+
+	if err != nil {
+		utils.Error(w, "Error  parsing body", err)
+		return
+	}
+	r.Body.Close()
+
+	if req.CurrentPassword == "" || req.NewPassword == "" {
+		utils.Error(w, "Password is required", nil)
+		return
+	}
+
+	db, err := sqlconnect.ConnectDB()
+
+	if err != nil {
+		utils.Error(w, "failed to connect db", err)
+		return
+	}
+
+	defer db.Close()
+
+	var username string
+	var userPassword string
+
+	err = db.QueryRow("SELECT username, password FROM execs WHERE id =?", userId).Scan(&username, &userPassword)
+
+	if err != nil {
+		utils.Error(w, "User not found", err)
+		return
+	}
+
+	ok, err := repo.VerifyPassword(req.CurrentPassword, userPassword)
+
+	if err != nil {
+		utils.Error(w, "Error verifying password", err)
+		return
+	}
+
+	if !ok {
+		utils.Error(w, "Password does not match", nil)
+		return
+	}
+
+	hashedPassword, err := repo.EncryptPassword(req.NewPassword)
+	if err != nil {
+		utils.Error(w, "Error hashing password", err)
+		return
+	}
+
+	currentTime := time.Now().Format(time.RFC3339)
+
+	_, err = db.Exec("UPDATE execs SET password =? , password_changed_at =? WHERE id= ?", hashedPassword, currentTime, userId)
+
+	if err != nil {
+		utils.Error(w, "Error while updating password", err)
+		return
+	}
+
+	utils.Success(w, "Password updated successfully", nil)
+
+}
+
+func ForgotPasswordHandler(w http.ResponseWriter, r *http.Request) {
+
+	var req struct {
+		Email string `json:"email"`
+	}
+
+	err := json.NewDecoder(r.Body).Decode(&req)
+
+	if err != nil {
+		utils.Error(w, "Invalid req body", err)
+		return
+	}
+	r.Body.Close()
+
+	db, err := sqlconnect.ConnectDB()
+
+	if err != nil {
+		utils.Error(w, "failed to connect db", err)
+		return
+	}
+
+	defer db.Close()
+	var exec models.Exec
+	err = db.QueryRow("SELECT id FROM execs WHERE email=?", req.Email).Scan(&exec.ID)
+
+	if err != nil {
+		utils.Error(w, "user not found", err)
+		return
+	}
+
+	duration, err := strconv.Atoi(os.Getenv("RESET_PASSWORD_EXPIRY"))
+
+	if err != nil {
+		utils.Error(w, "Error parsing Expiry Time", err)
+		return
+	}
+
+	mins := time.Duration(duration)
+
+	expiry := time.Now().Add(mins * time.Minute).Format(time.RFC3339)
+
+	tokenByte := make([]byte, 32)
+	_, err = rand.Read(tokenByte)
+
+	if err != nil {
+		utils.Error(w, "Error parsing token", err)
+		return
+	}
+
+	token := hex.EncodeToString(tokenByte)
+
+	hashedToken := sha256.Sum256(tokenByte)
+
+	hashedTokenStr := hex.EncodeToString(hashedToken[:])
+	fmt.Println(hashedTokenStr, expiry, exec.ID, "expiry")
+
+	_, err = db.Exec("UPDATE execs SET password_reset_token =?, password_token_expires=? WHERE id=?", hashedTokenStr, expiry, exec.ID)
+
+	if err != nil {
+		utils.Error(w, "failed to update db", err)
+		return
+	}
+
+	resetUrl := fmt.Sprintf("/execs/resetpassword/%s", token)
+
+	message := fmt.Sprintf("Reset pass using the following link: %s , you have %d minutes", resetUrl, int(mins))
+
+	utils.Success(w, message, nil)
+
+}
+
+func ResetPasswordHandler(w http.ResponseWriter, r *http.Request) {
+
+	token := r.PathValue("resetcode")
+
+	type request struct {
+		NewPassword     string `json:"new_password"`
+		ConfirmPassword string `json:"confirm_password"`
+	}
+
+	var req request
+
+	err := json.NewDecoder(r.Body).Decode(&req)
+
+	if err != nil {
+		utils.Error(w, "invalid request body", err)
+		return
+	}
+	if req.NewPassword == "" || req.ConfirmPassword == "" {
+		utils.Error(w, "Password is required", nil)
+		return
+	}
+
+	if req.NewPassword != req.ConfirmPassword {
+		utils.Error(w, "Password does not match", nil)
+		return
+	}
+
+	db, err := sqlconnect.ConnectDB()
+
+	if err != nil {
+		utils.Error(w, "failed to connect db", err)
+		return
+	}
+
+	defer db.Close()
+
+	var user models.Exec
+	bytes, err := hex.DecodeString(token)
+	if err != nil {
+		utils.Error(w, "failed to read token", err)
+		return
+	}
+	hashedToken := sha256.Sum256(bytes)
+	hashedTokenString := hex.EncodeToString(hashedToken[:])
+
+	fmt.Println(token, "<<<>>>")
+
+	query := "SELECT id,email FROM execs WHERE password_reset_token=? AND password_token_expires >?"
+	err = db.QueryRow(query, hashedTokenString, time.Now().Format(time.RFC3339)).Scan(&user.ID, &user.Email)
+
+	if err != nil {
+		utils.Error(w, "Invalid or expired code", err)
+		return
+	}
+
+	hashedPassword, err := repo.EncryptPassword(req.NewPassword)
+
+	if err != nil {
+		utils.Error(w, "Internal error", err)
+		return
+	}
+	updateQuery := "UPDATE execs SET password=? ,password_reset_token =NULL , password_token_expires=NULL ,password_changed_at=? WHERE id =?"
+
+	_, err = db.Exec(updateQuery, hashedPassword, time.Now().Format(time.RFC3339), user.ID)
+
+	if err != nil {
+		utils.Error(w, "Internal db error", err)
+		return
+	}
+
+	utils.Success(w, "Password updated successfully", nil)
 
 }

@@ -46,7 +46,7 @@ func main() {
 	router.RegisterStudentsRoutes(mux)
 	router.RegisterTeachersRoutes(mux)
 	router.RegisterExecRoutes(mux)
-	jwtMiddleware := mw.MiddlewareExcludePaths(mw.JWTMiddleware, "/execs/login")
+	jwtMiddleware := mw.MiddlewareExcludePaths(mw.JWTMiddleware, "/execs/login", "/execs/forgotPassword")
 	rl := mw.NewRateLimiter(400, time.Minute)
 	handler := applyMiddlewares(
 		mux,
