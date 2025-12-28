@@ -55,6 +55,7 @@ func main() {
 		mw.Compression,
 		mw.ResponseTime,
 		mw.SecurityHeaders,
+		mw.XSSMiddleware,
 		jwtMiddleware,
 	)
 

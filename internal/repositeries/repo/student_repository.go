@@ -3,6 +3,7 @@ package repo
 import (
 	"database/sql"
 	"fmt"
+	"math"
 	"school-api/internal/models"
 )
 
@@ -38,16 +39,25 @@ func FindStudentByID(id int, db *sql.DB) (*models.Student, error) {
 	return &s, nil
 }
 
-func FindStudent(db *sql.DB, search string, filters map[string]string, sort string) ([]models.Student, error) {
+func FindStudent(
+	db *sql.DB,
+	search string,
+	filters map[string]string,
+	sort string,
+	limit int,
+	page int,
+) ([]models.Student, models.PaginationMeta, error) {
 
-	query := `
-		SELECT
-			s.id,
-			s.first_name,
-			s.last_name,
-			s.email,
-			c.id   AS class_id,
-			c.name AS class_name
+	// sane defaults
+	if page <= 0 {
+		page = 1
+	}
+	if limit <= 0 {
+		limit = 10
+	}
+
+	// base query
+	baseQuery := `
 		FROM student s
 		JOIN classes c ON s.class_id = c.id
 		WHERE 1=1
@@ -62,17 +72,17 @@ func FindStudent(db *sql.DB, search string, filters map[string]string, sort stri
 		}
 
 		if key == "class" {
-			query += " AND c.name = ?"
-			args = append(args, val)
+			baseQuery += " AND c.name = ?"
 		} else {
-			query += " AND s." + key + " = ?"
-			args = append(args, val)
+			baseQuery += " AND s." + key + " = ?"
 		}
+
+		args = append(args, val)
 	}
 
 	// search
 	if search != "" {
-		query += `
+		baseQuery += `
 			AND (
 				s.first_name LIKE ? OR
 				s.last_name  LIKE ? OR
@@ -84,14 +94,39 @@ func FindStudent(db *sql.DB, search string, filters map[string]string, sort stri
 		args = append(args, pattern, pattern, pattern, pattern)
 	}
 
-	// sorting
-	if sort != "" {
-		query += " ORDER BY s." + sort
+	// COUNT query
+	countQuery := "SELECT COUNT(*) " + baseQuery
+
+	var totalRecords int
+	err := db.QueryRow(countQuery, args...).Scan(&totalRecords)
+	if err != nil {
+		return nil, models.PaginationMeta{}, err
 	}
 
-	rows, err := db.Query(query, args...)
+	// DATA query
+	dataQuery := `
+		SELECT
+			s.id,
+			s.first_name,
+			s.last_name,
+			s.email,
+			c.id   AS class_id,
+			c.name AS class_name
+	` + baseQuery
+
+	// sorting (WARNING: must whitelist in real code)
+	if sort != "" {
+		dataQuery += " ORDER BY s." + sort
+	}
+
+	offset := (page - 1) * limit
+	dataQuery += " LIMIT ? OFFSET ?"
+
+	dataArgs := append(args, limit, offset)
+
+	rows, err := db.Query(dataQuery, dataArgs...)
 	if err != nil {
-		return nil, err
+		return nil, models.PaginationMeta{}, err
 	}
 	defer rows.Close()
 
@@ -111,7 +146,7 @@ func FindStudent(db *sql.DB, search string, filters map[string]string, sort stri
 			&className,
 		)
 		if err != nil {
-			return nil, err
+			return nil, models.PaginationMeta{}, err
 		}
 
 		s.ClassId = classID
@@ -123,7 +158,18 @@ func FindStudent(db *sql.DB, search string, filters map[string]string, sort stri
 		students = append(students, s)
 	}
 
-	return students, nil
+	totalPages := int(math.Ceil(float64(totalRecords) / float64(limit)))
+
+	meta := models.PaginationMeta{
+		TotalRecords: totalRecords,
+		TotalPages:   totalPages,
+		Page:         page,
+		Limit:        limit,
+		HasNext:      page < totalPages,
+		HasPrev:      page > 1,
+	}
+
+	return students, meta, nil
 }
 
 func AddStudent(db *sql.DB, t *models.Student) (sql.Result, error) {

@@ -66,7 +66,9 @@ func GetStudentsHandler(w http.ResponseWriter, r *http.Request) {
 		"subject":    true,
 	})
 
-	students, err := repo.FindStudent(db.DB, search, filters, sort)
+	page, limit := getPaginationParams(r)
+
+	students, meta, err := repo.FindStudent(db.DB, search, filters, sort, limit, page)
 
 	if err != nil {
 		utils.Http500(w, err)
@@ -77,7 +79,25 @@ func GetStudentsHandler(w http.ResponseWriter, r *http.Request) {
 		students = []models.Student{}
 	}
 
-	utils.SuccessWithCount(w, "Students fetched successfully", len(students), students)
+	utils.SuccessWithMeta(w, "Students fetched successfully", students, meta)
+
+}
+
+func getPaginationParams(r *http.Request) (int, int) {
+
+	page, err := strconv.Atoi(r.URL.Query().Get("page"))
+
+	if err != nil {
+		page = 1
+	}
+
+	limit, err := strconv.Atoi(r.URL.Query().Get("limit"))
+
+	if err != nil {
+		limit = 10
+	}
+
+	return page, limit
 
 }
 
